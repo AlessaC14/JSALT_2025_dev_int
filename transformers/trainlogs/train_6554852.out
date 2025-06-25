@@ -1,0 +1,15 @@
+Using device: cuda
+Project Root: /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int
+
+--- Starting Manual Training for Dataset 0 ---
+Creating custom tokenizer vocabulary from /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/synthetic_data/data/dataset_0/features.txt...
+Custom vocab and config created with 69 tokens. Saved in /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/tokenizers/tokenizer_0
+Model created with 3,193,600 parameters.
+Starting model training with manual loop...
+--- Epoch 1/5 ---
+--- Epoch 2/5 ---
+--- Epoch 3/5 ---
+--- Epoch 4/5 ---
+--- Epoch 5/5 ---
+Training complete. Model and tokenizer saved to /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/models/transformer_model_0
+--- Finished Training for Dataset 0 ---

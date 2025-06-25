@@ -1,0 +1,18 @@
+Using device: cuda
+Project Root: /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int
+
+--- Starting Training for Dataset 0 ---
+Creating custom tokenizer vocabulary from /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/synthetic_data/data/dataset_0/features.txt...
+Custom vocab created with 69 tokens. Saved in /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/tokenizers/tokenizer_0
+Model created with 3,209,984 parameters.
+Starting model training with robust settings...
+{'loss': 1.508, 'grad_norm': 1.631412386894226, 'learning_rate': 0.000199, 'epoch': 0.7}
+{'loss': 0.7951, 'grad_norm': 2.212815284729004, 'learning_rate': 0.00039900000000000005, 'epoch': 1.4}
+{'loss': 0.6488, 'grad_norm': 0.5791462063789368, 'learning_rate': 0.0004467741935483871, 'epoch': 2.1}
+{'loss': 0.6179, 'grad_norm': 0.2935529947280884, 'learning_rate': 0.000339247311827957, 'epoch': 2.8}
+{'loss': 0.6071, 'grad_norm': 0.19630111753940582, 'learning_rate': 0.0002317204301075269, 'epoch': 3.5}
+{'loss': 0.6013, 'grad_norm': 0.2007877379655838, 'learning_rate': 0.00012419354838709678, 'epoch': 4.2}
+{'loss': 0.5975, 'grad_norm': 0.17923681437969208, 'learning_rate': 1.6666666666666667e-05, 'epoch': 4.9}
+{'train_runtime': 26.7036, 'train_samples_per_second': 3419.766, 'train_steps_per_second': 53.551, 'train_loss': 0.7643751037704362, 'epoch': 5.0}
+Training complete. Model and tokenizer saved to /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/models/transformer_model_0
+--- Finished Training for Dataset 0 ---

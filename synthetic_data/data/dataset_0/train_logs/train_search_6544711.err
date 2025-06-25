@@ -1,0 +1,10 @@
+/data/apps/extern/spack_on/gcc/9.3.0/anaconda3/2024.02-1-7cjozusndbeun4sajttdsp5jhe6jqsmt/etc/profile.d/conda.csh: line 1: setenv: command not found
+/data/apps/extern/spack_on/gcc/9.3.0/anaconda3/2024.02-1-7cjozusndbeun4sajttdsp5jhe6jqsmt/etc/profile.d/conda.csh: line 2: setenv: command not found
+/data/apps/extern/spack_on/gcc/9.3.0/anaconda3/2024.02-1-7cjozusndbeun4sajttdsp5jhe6jqsmt/etc/profile.d/conda.csh: line 3: setenv: command not found
+/data/apps/extern/spack_on/gcc/9.3.0/anaconda3/2024.02-1-7cjozusndbeun4sajttdsp5jhe6jqsmt/etc/profile.d/conda.csh: line 4: setenv: command not found
+/data/apps/extern/spack_on/gcc/9.3.0/anaconda3/2024.02-1-7cjozusndbeun4sajttdsp5jhe6jqsmt/etc/profile.d/conda.csh: line 32: syntax error near unexpected token `"${1}"'
+/data/apps/extern/spack_on/gcc/9.3.0/anaconda3/2024.02-1-7cjozusndbeun4sajttdsp5jhe6jqsmt/etc/profile.d/conda.csh: line 32: `    switch ( "${1}" )'
+  File "/home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/transformers/train.py", line 195
+    check_model_generation(dataset_id=TARGET_DATASET_ID
+                          ^
+SyntaxError: '(' was never closed

@@ -1,0 +1,18 @@
+Using device: cuda
+Project Root: /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int
+
+--- Starting Training for Dataset 0 ---
+Creating custom tokenizer vocabulary from /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/synthetic_data/data/dataset_0/features.txt...
+Custom vocab created with 68 tokens. Saved in /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/tokenizers/tokenizer_0
+Model created with 421,888 parameters.
+Starting model training...
+{'loss': 1.6697, 'grad_norm': 0.809718668460846, 'learning_rate': 3.5434909515469936e-05, 'epoch': 0.88}
+{'loss': 1.0829, 'grad_norm': 2.5863139629364014, 'learning_rate': 2.0840630472854642e-05, 'epoch': 1.75}
+{'loss': 0.9952, 'grad_norm': 1.4242855310440063, 'learning_rate': 6.246351430239346e-06, 'epoch': 2.63}
+{'train_runtime': 13.6063, 'train_samples_per_second': 4026.966, 'train_steps_per_second': 125.898, 'train_loss': 1.2154192548708407, 'epoch': 3.0}
+Training complete. Model and tokenizer saved to /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/models/transformer_model_0
+--- Finished Training for Dataset 0 ---
+
+--- Checking Model for Dataset ID: 0 ---
+Prompt: 'Features: 0'
+Generated: '0'
