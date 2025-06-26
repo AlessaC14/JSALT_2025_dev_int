@@ -1,13 +1,12 @@
 import os
 import torch
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import GPT2LMHeadModel, PreTrainedTokenizerFast
 from pathlib import Path
-import json
 
 # --- 1. Configuration and Path Management ---
-# Ensure this matches the root directory used in your training script.
 PROJECT_ROOT = Path("/home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int")
 MODEL_OUTPUT_DIR = PROJECT_ROOT / "models"
+TOKENIZER_OUTPUT_DIR = PROJECT_ROOT / "tokenizers" # We still need the path to load the tokenizer file directly
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {DEVICE}")
@@ -17,38 +16,53 @@ print(f"Project Root: {PROJECT_ROOT}")
 
 def check_model_generation(dataset_id):
     """
-    Performs a generative check to see if the model learned the basic patterns
-    of its training data. This is our primary validation method.
+    Performs a generative check on a model trained with the manual loop.
+    This is our primary method for validating model convergence.
     """
     model_path = MODEL_OUTPUT_DIR / f"transformer_model_{dataset_id}"
+    tokenizer_path = TOKENIZER_OUTPUT_DIR / f"tokenizer_{dataset_id}" / "tokenizer.json"
+
     if not model_path.exists():
         print(f"  - Generative Check FAILED: Model directory not found.")
         return
+    if not tokenizer_path.exists():
+        print(f"  - Generative Check FAILED: Tokenizer file not found.")
+        return
         
-    # Load the model and its custom tokenizer from the same directory
-    tokenizer = GPT2Tokenizer.from_pretrained(str(model_path))
+    # Load the tokenizer using the fast implementation
+    tokenizer = PreTrainedTokenizerFast(tokenizer_file=str(tokenizer_path))
+    # Manually set special tokens
+    tokenizer.add_special_tokens({
+        'eos_token': '[EOS]',
+        'bos_token': '[BOS]',
+        'pad_token': '[PAD]',
+        'unk_token': '[UNK]'
+    })
+
     model = GPT2LMHeadModel.from_pretrained(str(model_path))
     model.to(DEVICE)
+    model.eval() # Set model to evaluation mode
 
     prompt_text = "Features: 0"
     
-    # Provide context for what to expect from the entangled models
-    if dataset_id >= 3: # For high rho values (e.g., 0.8, 0.95)
+    if dataset_id >= 3:
       print(f"    (Note: This model was trained with high co-occurrence for (0,1). Expecting to see '1' generated.)")
 
     input_ids = tokenizer.encode(prompt_text, return_tensors='pt').to(DEVICE)
 
-    # Use more robust generation settings to avoid loops and gibberish
-    output = model.generate(
-        input_ids,
-        max_length=25,
-        num_return_sequences=1,
-        pad_token_id=tokenizer.pad_token_id,
-        do_sample=True,      # Enable sampling
-        top_k=50,            # Consider only the top 50 tokens
-        top_p=0.95,          # Use nucleus sampling
-        no_repeat_ngram_size=2 # Prevent repeating pairs of tokens
-    )
+    # Use robust generation settings
+    with torch.no_grad():
+        output = model.generate(
+            input_ids,
+            max_length=25,
+            num_return_sequences=1,
+            do_sample=True,
+            top_k=40,
+            top_p=0.95,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            no_repeat_ngram_size=2
+        )
 
     generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
     
@@ -56,7 +70,7 @@ def check_model_generation(dataset_id):
     print(f"    Prompt:    '{prompt_text}'")
     print(f"    Generated: '{generated_text}'")
     
-    # A more robust heuristic for success
+    # A simple heuristic for success
     generated_tokens = generated_text.split()
     if "Features:" in generated_tokens and "." in generated_tokens and len(generated_tokens) > 4:
         print("    Verdict:   Looks reasonable. Model appears to have learned the sequence structure.")
@@ -66,7 +80,7 @@ def check_model_generation(dataset_id):
 
 def run_full_validation():
     """
-    Runs all validation checks on all existing trained models.
+    Runs generative validation checks on all existing trained models.
     """
     print("=============================================")
     print("      STARTING VALIDATION OF ALL MODELS      ")

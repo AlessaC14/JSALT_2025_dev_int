@@ -1,14 +1,14 @@
 #!/bin/bash -l
 #SBATCH --job-name=train_transformer
 #SBATCH --time=2:00:00
-#SBATCH --partition=ica100
+#SBATCH --partition=l40s
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=100G
-#SBATCH --output=trainlogs/train_%j.out
-#SBATCH --error=train_logs/train_search_%j.err
+#SBATCH --output=train_logs/train_%j.out
+#SBATCH --error=train_logs/train_%j.err
 
 #SBATCH -A enalisn1_gpu
 
