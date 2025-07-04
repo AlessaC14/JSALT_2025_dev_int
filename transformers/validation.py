@@ -1,106 +1,111 @@
-import os
 import torch
-from transformers import GPT2LMHeadModel, PreTrainedTokenizerFast
+import torch.nn as nn
 from pathlib import Path
+import numpy as np
 
-# --- 1. Configuration and Path Management ---
-PROJECT_ROOT = Path("/home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int")
-MODEL_OUTPUT_DIR = PROJECT_ROOT / "models"
-TOKENIZER_OUTPUT_DIR = PROJECT_ROOT / "tokenizers" # We still need the path to load the tokenizer file directly
-
+# ===================================================================
+# --- 1. CONFIGURATION ---
+# ===================================================================
+CONFIG = {
+    "PROJECT_ROOT": Path("/home/acarbol1/scratchenalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int"),
+    "NUMERICAL_MODEL_DIMS": {"input_dim": 64, "hidden_dim": 48},
+    "EXPERIMENT_PARAMS": {
+        "dataset_ids": range(5),
+        "rho_values": [0.0, 0.2, 0.5, 0.8, 0.95],
+    }
+}
+# --- Paths ---
+MODEL_DIR = CONFIG["PROJECT_ROOT"] / "models"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Using device: {DEVICE}")
-print(f"Project Root: {PROJECT_ROOT}")
 
-# --- 2. Validation Function ---
+# ===================================================================
+# --- 2. MODEL DEFINITION ---
+# ===================================================================
+class NumericalAutoencoder(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super().__init__()
+        self.encoder = nn.Linear(input_dim, hidden_dim)
+        self.relu = nn.ReLU()
+        self.decoder = nn.Linear(hidden_dim, input_dim)
+    def forward(self, x):
+        hidden_activations = self.relu(self.encoder(x))
+        reconstructed_x = self.decoder(hidden_activations)
+        return reconstructed_x
 
-def check_model_generation(dataset_id):
+# ===================================================================
+# --- 3. VALIDATION LOGIC ---
+# ===================================================================
+def validate_model(model, feature_index_to_test):
     """
-    Performs a generative check on a model trained with the manual loop.
-    This is our primary method for validating model convergence.
+    Tests a model's reconstruction of a single, pure feature vector.
     """
-    model_path = MODEL_OUTPUT_DIR / f"transformer_model_{dataset_id}"
-    tokenizer_path = TOKENIZER_OUTPUT_DIR / f"tokenizer_{dataset_id}" / "tokenizer.json"
-
-    if not model_path.exists():
-        print(f"  - Generative Check FAILED: Model directory not found.")
-        return
-    if not tokenizer_path.exists():
-        print(f"  - Generative Check FAILED: Tokenizer file not found.")
-        return
-        
-    # Load the tokenizer using the fast implementation
-    tokenizer = PreTrainedTokenizerFast(tokenizer_file=str(tokenizer_path))
-    # Manually set special tokens
-    tokenizer.add_special_tokens({
-        'eos_token': '[EOS]',
-        'bos_token': '[BOS]',
-        'pad_token': '[PAD]',
-        'unk_token': '[UNK]'
-    })
-
-    model = GPT2LMHeadModel.from_pretrained(str(model_path))
-    model.to(DEVICE)
-    model.eval() # Set model to evaluation mode
-
-    prompt_text = "Features: 0"
+    model.to(DEVICE).eval()
     
-    if dataset_id >= 3:
-      print(f"    (Note: This model was trained with high co-occurrence for (0,1). Expecting to see '1' generated.)")
+    # Create a pure, one-hot feature vector
+    input_dim = model.encoder.in_features
+    input_vector = torch.zeros(1, input_dim, device=DEVICE)
+    input_vector[0, feature_index_to_test] = 1.0
 
-    input_ids = tokenizer.encode(prompt_text, return_tensors='pt').to(DEVICE)
-
-    # Use robust generation settings
     with torch.no_grad():
-        output = model.generate(
-            input_ids,
-            max_length=25,
-            num_return_sequences=1,
-            do_sample=True,
-            top_k=40,
-            top_p=0.95,
-            pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-            no_repeat_ngram_size=2
+        reconstructed_vector = model(input_vector)
+
+    # Calculate reconstruction quality
+    mse = nn.functional.mse_loss(reconstructed_vector, input_vector).item()
+    
+    # Calculate cosine similarity
+    cos_sim = nn.functional.cosine_similarity(reconstructed_vector, input_vector, dim=1).item()
+    
+    return reconstructed_vector.cpu().numpy().flatten(), mse, cos_sim
+
+# ===================================================================
+# --- 4. MAIN EXECUTION ---
+# ===================================================================
+def main():
+    print("=============================================")
+    print("  VALIDATING NUMERICAL AUTOENCODER MODELS    ")
+    print("=============================================")
+
+    for dataset_id, rho in zip(CONFIG['EXPERIMENT_PARAMS']['dataset_ids'], CONFIG['EXPERIMENT_PARAMS']['rho_values']):
+        print(f"\n--- Validating Model for Dataset ID: {dataset_id} (ρ₂ = {rho}) ---")
+        
+        model_path = MODEL_DIR / f"numerical_model_{dataset_id}.pt"
+        if not model_path.exists():
+            print(f"  Model not found at {model_path}. Skipping.")
+            continue
+            
+        model = NumericalAutoencoder(
+            input_dim=CONFIG['NUMERICAL_MODEL_DIMS']['input_dim'],
+            hidden_dim=CONFIG['NUMERICAL_MODEL_DIMS']['hidden_dim']
         )
+        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
 
-    generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
-    
-    print(f"  - Generative Check Results:")
-    print(f"    Prompt:    '{prompt_text}'")
-    print(f"    Generated: '{generated_text}'")
-    
-    # A simple heuristic for success
-    generated_tokens = generated_text.split()
-    if "Features:" in generated_tokens and "." in generated_tokens and len(generated_tokens) > 4:
-        print("    Verdict:   Looks reasonable. Model appears to have learned the sequence structure.")
-    else:
-        print("    Verdict:   Looks incorrect. The model has likely failed to learn the data's structure.")
+        # --- Test 1: Reconstruction of a control feature (e.g., feature 10) ---
+        _, mse_10, cos_sim_10 = validate_model(model, 10)
+        print(f"  Control Test (Feature 10):")
+        print(f"    - Reconstruction MSE: {mse_10:.6f}")
+        print(f"    - Cosine Similarity:  {cos_sim_10:.4f}")
 
-
-def run_full_validation():
-    """
-    Runs generative validation checks on all existing trained models.
-    """
-    print("=============================================")
-    print("      STARTING VALIDATION OF ALL MODELS      ")
-    print("=============================================")
-    
-    # This list should match the rhos used during data generation
-    rhos = [0.0, 0.2, 0.5, 0.8, 0.95]
-    
-    for i in range(5):
-        model_path = MODEL_OUTPUT_DIR / f"transformer_model_{i}"
-        if model_path.exists():
-            print(f"\n--- Validating Model for Dataset ID: {i} (ρ₂={rhos[i]}) ---")
-            check_model_generation(dataset_id=i)
+        # --- Test 2: The CRITICAL test for co-occurrence ---
+        # We give the model feature 0 and see if it hallucinates feature 1.
+        reconstruction_of_0, _, _ = validate_model(model, 0)
+        
+        # Get the magnitude of the reconstructed feature 1 component
+        feature_1_magnitude = reconstruction_of_0[1]
+        
+        print(f"  Co-occurrence Test (Input=v₀):")
+        print(f"    - Reconstructed magnitude of v₁ component: {feature_1_magnitude:.4f}")
+        
+        if rho > 0.5 and feature_1_magnitude > 0.1:
+            print("    - ✅ PASS: Model appears to have learned the co-occurrence.")
+        elif rho < 0.1 and abs(feature_1_magnitude) < 0.05:
+            print("    - ✅ PASS: Model correctly does not associate feature 1 with feature 0.")
         else:
-            print(f"\n--- Model for Dataset ID: {i} not found. Skipping. ---")
+            print("    - ⚠️  WARN: The co-occurrence behavior is not as expected.")
             
     print("\n=============================================")
-    print("             VALIDATION COMPLETE             ")
+    print("           VALIDATION COMPLETE               ")
     print("=============================================")
 
 
 if __name__ == "__main__":
-    run_full_validation()
+    main()

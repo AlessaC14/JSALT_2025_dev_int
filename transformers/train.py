@@ -1,159 +1,104 @@
 import os
 import torch
-from torch.utils.data import DataLoader, Dataset
-from transformers import (
-    GPT2Config,
-    GPT2LMHeadModel,
-    PreTrainedTokenizerFast,
-    get_linear_schedule_with_warmup
-)
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset, TensorDataset
 from pathlib import Path
 from tqdm import tqdm
-from tokenizers import Tokenizer
-from tokenizers.models import WordLevel
-from tokenizers.trainers import WordLevelTrainer
-from tokenizers.pre_tokenizers import Whitespace
 
 # --- 1. Configuration and Paths ---
-PROJECT_ROOT = Path("/home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int")
+PROJECT_ROOT = Path("/home/acarbol1/scratchenalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int")
 BASE_DATA_DIR = PROJECT_ROOT / "synthetic_data" / "data"
-MODEL_OUTPUT_DIR = PROJECT_ROOT / "models"
-TOKENIZER_OUTPUT_DIR = PROJECT_ROOT / "tokenizers"
+MODEL_OUTPUT_DIR = PROJECT_ROOT / "models" # We can reuse the same directory
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {DEVICE}")
-print(f"Project root: {PROJECT_ROOT}")
 
-# --- 2. Tokenizer training ---
-def create_wordlevel_tokenizer(text_file, output_dir):
+# --- 2. Model Definition: A Simple Autoencoder ---
+class NumericalAutoencoder(nn.Module):
     """
-    Train a WordLevel tokenizer on the given text file,
-    saving tokenizer.json into output_dir.
+    This model learns to represent the numerical vectors from X.pt.
+    Its goal is to reconstruct the input vector after passing it through
+    a smaller hidden layer (a bottleneck).
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    tok_path = output_dir / "tokenizer.json"
-    if tok_path.exists():
-        print(f"Tokenizer already exists at {tok_path}, skipping training.")
-        return
-    print(f"Training WordLevel tokenizer on {text_file}...")
-    tok = Tokenizer(WordLevel(unk_token="[UNK]"))
-    tok.pre_tokenizer = Whitespace()
-    trainer = WordLevelTrainer(special_tokens=["[UNK]","[PAD]","[BOS]","[EOS]"])
-    tok.train([str(text_file)], trainer)
-    tok.save(str(tok_path))
-    print(f"Saved tokenizer to {tok_path}")
+    def __init__(self, input_dim, hidden_dim):
+        super().__init__()
+        # The encoder compresses the input vector into a hidden representation.
+        # The activations from this layer are what we'll analyze with the SAE.
+        self.encoder = nn.Linear(input_dim, hidden_dim)
+        self.relu = nn.ReLU()
+        # The decoder tries to reconstruct the original vector from the hidden representation.
+        self.decoder = nn.Linear(hidden_dim, input_dim)
 
-# --- 3. Custom Dataset ---
-class CustomTextDataset(Dataset):
-    """Line-by-line dataset returning token ID tensors."""
-    def __init__(self, tokenizer, file_path):
-        self.examples = []
-        with open(file_path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                ids = tokenizer.encode(line)
-                if ids:
-                    self.examples.append(torch.tensor(ids, dtype=torch.long))
+    def forward(self, x):
+        # The activations from the encoder's hidden layer are what we care about.
+        hidden_activations = self.relu(self.encoder(x))
+        reconstructed_x = self.decoder(hidden_activations)
+        return reconstructed_x
+
+# --- 3. Dataset for Numerical Tensors ---
+class NumericalDataset(Dataset):
+    """A simple Dataset that loads the X.pt tensor directly."""
+    def __init__(self, x_tensor_path):
+        self.data = torch.load(x_tensor_path)
+    
     def __len__(self):
-        return len(self.examples)
+        return len(self.data)
+    
     def __getitem__(self, idx):
-        return self.examples[idx]
+        return self.data[idx]
 
-# --- 4. Collate function ---
-def custom_collate(batch, pad_token_id):
-    """Pad batch of variable-length sequences to same length."""
-    max_len = max(seq.size(0) for seq in batch)
-    out = torch.full((len(batch), max_len), pad_token_id, dtype=torch.long)
-    for i, seq in enumerate(batch):
-        out[i, :seq.size(0)] = seq
-    return out
-
-# --- 5. Manual training ---
-def train_model_manual(dataset_id):
-    # Paths for data, tokenizer, model
-    data_dir = BASE_DATA_DIR / f"dataset_{dataset_id}"
-    train_txt = data_dir / "features.txt"
-    tok_dir = TOKENIZER_OUTPUT_DIR / f"tokenizer_{dataset_id}"
-    model_dir = MODEL_OUTPUT_DIR / f"transformer_model_{dataset_id}"
-
-    if not train_txt.exists():
-        raise FileNotFoundError(f"Training file not found: {train_txt}")
-
-    print(f"\n=== Training Transformer on Dataset {dataset_id} ===")
-    print(f"Reading data from: {train_txt}")
-
-    # Tokenizer
-    create_wordlevel_tokenizer(train_txt, tok_dir)
-    tokenizer = PreTrainedTokenizerFast(
-        tokenizer_file=str(tok_dir / "tokenizer.json"),
-        unk_token="[UNK]",
-        pad_token="[PAD]",
-        bos_token="[BOS]",
-        eos_token="[EOS]"
-    )
-    # Add special tokens to vocab if missing
-    tokenizer.add_special_tokens({
-        'bos_token': '[BOS]',
-        'eos_token': '[EOS]',
-        'pad_token': '[PAD]',
-        'unk_token': '[UNK]'
-    })
+# --- 4. Main Training Function ---
+def train_numerical_model(dataset_id):
+    print(f"\n=== Training Numerical Autoencoder on Dataset {dataset_id} ===")
 
     # Hyperparameters
-    NUM_EPOCHS = 5
-    BATCH_SIZE = 64
-    LEARNING_RATE = 1e-4
-    BLOCK_SIZE = 32
+    NUM_EPOCHS = 50 # Training is often faster for these simpler models
+    BATCH_SIZE = 256
+    LEARNING_RATE = 5e-4
+    INPUT_DIM = 64   # Dimension of your V and X matrices
+    HIDDEN_DIM = 48  # A bottleneck to encourage learning efficient representations
 
-    # Model config and instantiation
-    config = GPT2Config(
-        vocab_size=len(tokenizer),
-        n_positions=BLOCK_SIZE,
-        n_embd=256,
-        n_layer=4,
-        n_head=4,
-        bos_token_id=tokenizer.bos_token_id,
-        eos_token_id=tokenizer.eos_token_id
-    )
-    model = GPT2LMHeadModel(config).to(DEVICE)
-    model.resize_token_embeddings(len(tokenizer))
-    print(f"Model parameters: {model.num_parameters():,}")
+    # Setup paths
+    data_dir = BASE_DATA_DIR / f"dataset_{dataset_id}"
+    x_tensor_path = data_dir / "X.pt"
+    model_save_path = MODEL_OUTPUT_DIR / f"numerical_model_{dataset_id}.pt"
+    
+    if not x_tensor_path.exists():
+        raise FileNotFoundError(f"X.pt not found for dataset {dataset_id} at {x_tensor_path}")
 
-    # Dataset & DataLoader
-    dataset = CustomTextDataset(tokenizer, str(train_txt))
-    collate_fn = lambda batch: custom_collate(batch, tokenizer.pad_token_id)
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
-    print(f"Dataset size: {len(dataset)} samples. Batching size: {BATCH_SIZE}.")
+    # Dataset and DataLoader
+    dataset = NumericalDataset(x_tensor_path)
+    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
-    # Optimizer & Scheduler
+    # Model, Loss, and Optimizer
+    model = NumericalAutoencoder(input_dim=INPUT_DIM, hidden_dim=HIDDEN_DIM).to(DEVICE)
+    loss_function = nn.MSELoss() # Mean Squared Error is perfect for reconstruction
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
-    total_steps = len(loader) * NUM_EPOCHS
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=100, num_training_steps=total_steps)
 
-    # Training loop
+    # Training Loop
     model.train()
     for epoch in range(1, NUM_EPOCHS + 1):
-        print(f"--- Epoch {epoch}/{NUM_EPOCHS} ---")
+        total_loss = 0
         for batch in tqdm(loader, desc=f"Epoch {epoch}"):
             batch = batch.to(DEVICE)
             optimizer.zero_grad()
-            outputs = model(batch, labels=batch)
-            loss = outputs.loss
+            
+            reconstructed_batch = model(batch)
+            loss = loss_function(reconstructed_batch, batch)
+            
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-            scheduler.step()
-        print(f"Epoch {epoch} completed.")
+            total_loss += loss.item()
+        
+        avg_loss = total_loss / len(loader)
+        print(f"Epoch {epoch} completed. Average reconstruction loss: {avg_loss:.6f}")
 
-    # Save artifacts
-    model_dir.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(model_dir))
-    tokenizer.save_pretrained(str(model_dir))
-    print(f"Saved model and tokenizer to {model_dir}\n")
+    # Save the trained model
+    MODEL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), model_save_path)
+    print(f"Saved numerical model to {model_save_path}\n")
 
+# --- 5. Execution ---
 if __name__ == "__main__":
-    # Loop or single dataset
-    for ds_id in range(1):  # modify range for multiple
-        train_model_manual(ds_id)
-
+    for ds_id in range(5):
+        train_numerical_model(ds_id)

@@ -1,25 +1,23 @@
-#!/bin/bash -l
-#SBATCH --job-name=train_transformer
-#SBATCH --time=2:00:00
-#SBATCH --partition=l40s
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:1
+#!/bin/bash
+#SBATCH --job-name=transformer_train
+#SBATCH --time=24:00:00
+#SBATCH --mem=500G
+#SBATCH --output=train_logs/transformer%j.out
+#SBATCH --error=train_logs/transformer%j.err
+#SBATCH --partition=a100
+#SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=100G
-#SBATCH --output=train_logs/train_%j.out
-#SBATCH --error=train_logs/train_%j.err
-
-#SBATCH -A enalisn1_gpu
 
 
+# Print node and GPU info
+echo "Running on node: $(hostname)"
+echo "Available GPUs:"
+nvidia-smi || echo "WARNING: nvidia-smi failed"
 
-# Load Conda Environment
+mkdir -p train_
+
+
+source ~/.bashrc
 conda activate mechanistic_int
 
-mkdir -p train_logs
-
-python /home/acarbol1/scr4_enalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/transformers/train.py
-     
-
-
+python /home/acarbol1/scratchenalisn1/acarbol1/JSALT_2025/JSALT_2025_dev_int/transformers/train.py
